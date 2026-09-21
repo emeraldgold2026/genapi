@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Semantic Chat</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1a1d21;--card:#fff;--me:#2563eb;--bd:#e2e5ea;--mut:#6b7280}
+@media(prefers-color-scheme:dark){:root{--bg:#111318;--fg:#e6e8eb;--card:#1b1e25;--bd:#2b2f38;--mut:#9aa1ad}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+header{padding:12px 16px;border-bottom:1px solid var(--bd);font-weight:600}
+#log{flex:1;overflow:auto;padding:16px;max-width:800px;width:100%;margin:0 auto}
+.msg{margin:0 0 14px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--bd);white-space:pre-wrap}
+.msg.me{background:var(--me);color:#fff;border-color:var(--me);margin-left:15%}
+.msg.warn{color:#b45309}
+details{margin-top:8px;color:var(--mut);font-size:13px}
+.src{margin:6px 0;padding:8px;border:1px solid var(--bd);border-radius:8px}
+form{display:flex;gap:8px;padding:12px 16px;max-width:800px;width:100%;margin:0 auto}
+input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit}
+button{padding:10px 16px;border:0;border-radius:10px;background:var(--me);color:#fff;font:inherit;cursor:pointer}
+button:disabled{opacity:.5}
+</style></head><body>
+<header>Semantic search chat <span id="status" style="font-weight:400;color:var(--mut);font-size:13px"></span></header>
+<div id="log"></div>
+<form id="f"><input id="q" placeholder="Ask something..." autocomplete="off" autofocus><button id="b">Send</button></form>
+<script>
+const log=document.getElementById('log'),q=document.getElementById('q'),b=document.getElementById('b');
+function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d}
+function sources(el,matches){
+  if(!matches||!matches.length)return;
+  const det=document.createElement('details'),s=document.createElement('summary');
+  s.textContent=`Sources (${matches.length})`;det.appendChild(s);
+  matches.forEach((m,i)=>{const d=document.createElement('div');d.className='src';
+    d.textContent=`[${i+1}] ${m.id} · score ${m.score.toFixed(3)}\n${m.text||JSON.stringify(m.metadata)}`;det.appendChild(d)});
+  el.appendChild(det)}
+fetch('/api/health').then(r=>r.json().then(j=>({r,j}))).then(({r,j})=>{
+  document.getElementById('status').textContent=r.ok?`· connected (${j.total_vectors} vectors)`:`· ${j.detail}`}).catch(()=>{});
+document.getElementById('f').onsubmit=async e=>{
+  e.preventDefault();const m=q.value.trim();if(!m)return;
+  q.value='';add('me',m);b.disabled=true;const w=add('bot','Searching…');
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})});
+    const j=await r.json();if(!r.ok)throw new Error(j.detail||r.statusText);
+    w.textContent=j.answer||'(no refined answer)';
+    if(j.warning)add('bot warn',j.warning);
+    sources(w,j.matches);
+  }catch(err){w.textContent='Error: '+err.message;w.classList.add('warn')}
+  b.disabled=false;q.focus()};
+</script></body></html>
